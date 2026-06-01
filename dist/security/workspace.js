@@ -49,3 +49,4 @@ export async function safeResolve(inputPath) {
         throw err;
     }
 }
+//# sourceMappingURL=workspace.js.map

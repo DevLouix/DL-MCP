@@ -4,3 +4,4 @@ export function textContent(text) {
 export function errorContent(text) {
     return { isError: true, content: [textContent(text)] };
 }
+//# sourceMappingURL=index.js.map

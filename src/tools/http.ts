@@ -1,5 +1,6 @@
 import type { ToolResult } from "../types/index.js";
 import { textContent, errorContent } from "../types/index.js";
+import { isPrivateHost } from "../security/network.js";
 
 export async function handleHttpRequest(
   url: string,
@@ -9,10 +10,14 @@ export async function handleHttpRequest(
   maxHttpResponseSize: number,
 ): Promise<ToolResult> {
   try {
-    const lowerUrl = url.toLowerCase();
-    if (lowerUrl.includes("localhost") || lowerUrl.includes("127.0.0.1") || lowerUrl.includes("192.168.")) {
+    const parsedUrl = new URL(url);
+
+    if (isPrivateHost(parsedUrl.hostname)) {
       throw new Error("Access Denied: Requesting internal/private network resources is restricted.");
     }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
     const requestHeaders = headers || {};
 
@@ -20,7 +25,11 @@ export async function handleHttpRequest(
       method: method as any,
       headers: requestHeaders,
       body: method !== "GET" ? body : undefined,
+      signal: controller.signal,
+      redirect: "error",
     });
+
+    clearTimeout(timeout);
 
     let responseText = await response.text();
 

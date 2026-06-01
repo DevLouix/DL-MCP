@@ -1,5 +1,6 @@
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { randomUUID } from "node:crypto";
+import { config } from "../config/env.js";
 export class TransportManager {
     sessions = new Map();
     requestIdToSession = new Map();
@@ -7,14 +8,40 @@ export class TransportManager {
     onerror;
     onmessage;
     setProtocolVersion;
+    touchSession(sessionId) {
+        const entry = this.sessions.get(sessionId);
+        if (!entry)
+            return;
+        entry.lastUsed = Date.now();
+        if (entry.idleTimer)
+            clearTimeout(entry.idleTimer);
+        entry.idleTimer = setTimeout(() => {
+            this.closeSession(sessionId);
+        }, config.sessionIdleTimeoutMs);
+        entry.idleTimer.unref();
+    }
+    closeSession(sessionId) {
+        const entry = this.sessions.get(sessionId);
+        if (!entry)
+            return;
+        if (entry.idleTimer)
+            clearTimeout(entry.idleTimer);
+        entry.transport.close().catch(() => { });
+        this.sessions.delete(sessionId);
+        for (const [reqId, sid] of this.requestIdToSession) {
+            if (sid === sessionId)
+                this.requestIdToSession.delete(reqId);
+        }
+    }
     async handleRequest(req, res, parsedBody) {
         const sessionId = req.headers["mcp-session-id"];
-        if (sessionId && this.sessions.has(sessionId)) {
-            const transport = this.sessions.get(sessionId);
-            await transport.handleRequest(req, res, parsedBody);
-            return;
-        }
         if (sessionId) {
+            const entry = this.sessions.get(sessionId);
+            if (entry) {
+                this.touchSession(sessionId);
+                await entry.transport.handleRequest(req, res, parsedBody);
+                return;
+            }
             res.statusCode = 404;
             res.end(JSON.stringify({ error: "Session not found" }));
             return;
@@ -22,16 +49,22 @@ export class TransportManager {
         const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (newSessionId) => {
-                this.sessions.set(newSessionId, transport);
+                const entry = { transport, lastUsed: Date.now() };
+                const timer = setTimeout(() => this.closeSession(newSessionId), config.sessionIdleTimeoutMs);
+                timer.unref();
+                entry.idleTimer = timer;
+                this.sessions.set(newSessionId, entry);
             },
             onsessionclosed: (closedSessionId) => {
-                this.sessions.delete(closedSessionId);
+                this.closeSession(closedSessionId);
             },
         });
         transport.onmessage = (message, extra) => {
             const msg = message;
             if (msg.id !== undefined) {
-                this.requestIdToSession.set(String(msg.id), transport.sessionId);
+                if (transport.sessionId) {
+                    this.requestIdToSession.set(String(msg.id), transport.sessionId);
+                }
             }
             this.onmessage?.(message, extra);
         };
@@ -41,9 +74,9 @@ export class TransportManager {
     }
     async start() { }
     async close() {
-        await Promise.all(Array.from(this.sessions.values()).map((t) => t.close()));
-        this.sessions.clear();
-        this.requestIdToSession.clear();
+        for (const sid of this.sessions.keys()) {
+            this.closeSession(sid);
+        }
     }
     async send(message, options) {
         let requestId = options?.relatedRequestId;
@@ -52,22 +85,26 @@ export class TransportManager {
         }
         if (requestId !== undefined) {
             const sid = this.requestIdToSession.get(String(requestId));
-            const transport = sid ? this.sessions.get(sid) : undefined;
-            if (transport) {
-                await transport.send(message, options);
-                return;
+            if (sid) {
+                const entry = this.sessions.get(sid);
+                if (entry) {
+                    this.touchSession(sid);
+                    await entry.transport.send(message, options);
+                    return;
+                }
             }
         }
-        for (const transport of this.sessions.values()) {
+        for (const entry of this.sessions.values()) {
             try {
-                await transport.send(message, options);
+                await entry.transport.send(message, options);
             }
-            catch {
-                // continue
-            }
+            catch { }
         }
     }
     get sessionId() {
-        return this.sessions.size > 0 ? Array.from(this.sessions.values())[0].sessionId : undefined;
+        for (const sid of this.sessions.keys())
+            return sid;
+        return undefined;
     }
 }
+//# sourceMappingURL=transport.js.map

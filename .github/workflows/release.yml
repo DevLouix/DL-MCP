@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g. v1.2.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build (tsc)
+        run: npm run build
+
+      - name: Bundle with esbuild
+        run: node build.mjs
+
+      - name: Create .env for bundle
+        run: cp .env dist/bundle.env
+
+      - name: Build Linux binary
+        run: npx pkg dist/bundle.cjs --targets node20-linux-x64 --output dist/dl-mcp-linux --compress Brotli
+
+      - name: Build macOS binary (arm64)
+        run: npx pkg dist/bundle.cjs --targets node20-macos-arm64 --output dist/dl-mcp-macos --compress Brotli
+
+      - name: Build Windows binary
+        run: npx pkg dist/bundle.cjs --targets node20-win-x64 --output dist/dl-mcp-win.exe --compress Brotli
+
+      - name: Create release archive
+        run: |
+          mkdir -p dist/artifacts
+          cd dist
+          cp bundle.cjs bundle.env ./
+          tar czf artifacts/dl-mcp-bundle.tar.gz bundle.cjs bundle.env
+          zip -j artifacts/dl-mcp-bundle.zip bundle.cjs bundle.env
+          cp dl-mcp-linux artifacts/dl-mcp-linux
+          cp dl-mcp-macos artifacts/dl-mcp-macos
+          cp dl-mcp-win.exe artifacts/dl-mcp-win.exe
+          ls -lh artifacts/
+
+      - name: Generate checksums
+        run: |
+          cd dist/artifacts
+          sha256sum * > sha256sums.txt
+          cat sha256sums.txt
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: DL-MCP ${{ github.ref_name }}
+          body_path: .github/RELEASE_TEMPLATE.md
+          fail_on_unmatched_files: true
+          files: |
+            dist/artifacts/dl-mcp-bundle.tar.gz
+            dist/artifacts/dl-mcp-bundle.zip
+            dist/artifacts/dl-mcp-linux
+            dist/artifacts/dl-mcp-macos
+            dist/artifacts/dl-mcp-win.exe
+            dist/artifacts/sha256sums.txt
+          generate_release_notes: true

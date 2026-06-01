@@ -7,7 +7,7 @@ import { handleSearchGrep } from "./search.js";
 import { handleHttpRequest } from "./http.js";
 import { config } from "../config/env.js";
 import type { Logger, ToolResult } from "../types/index.js";
-import { textContent, errorContent } from "../types/index.js";
+import { errorContent } from "../types/index.js";
 
 function withAuditLog<T extends Record<string, unknown>>(
   toolName: string,

@@ -110,3 +110,4 @@ export function registerAllTools(server, logger) {
         },
     }, withAuditLog("make_http_request", ({ url, method, headers, body }) => handleHttpRequest(url, method, headers, body, config.maxHttpResponseSize), logger));
 }
+//# sourceMappingURL=registry.js.map

@@ -1,16 +1,22 @@
 import { textContent, errorContent } from "../types/index.js";
+import { isPrivateHost } from "../security/network.js";
 export async function handleHttpRequest(url, method, headers, body, maxHttpResponseSize) {
     try {
-        const lowerUrl = url.toLowerCase();
-        if (lowerUrl.includes("localhost") || lowerUrl.includes("127.0.0.1") || lowerUrl.includes("192.168.")) {
+        const parsedUrl = new URL(url);
+        if (isPrivateHost(parsedUrl.hostname)) {
             throw new Error("Access Denied: Requesting internal/private network resources is restricted.");
         }
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
         const requestHeaders = headers || {};
         const response = await fetch(url, {
             method: method,
             headers: requestHeaders,
             body: method !== "GET" ? body : undefined,
+            signal: controller.signal,
+            redirect: "error",
         });
+        clearTimeout(timeout);
         let responseText = await response.text();
         if (responseText.length > maxHttpResponseSize) {
             responseText = responseText.slice(0, maxHttpResponseSize)
@@ -30,3 +36,4 @@ export async function handleHttpRequest(url, method, headers, body, maxHttpRespo
         return errorContent(`HTTP request failed: ${err.message}`);
     }
 }
+//# sourceMappingURL=http.js.map

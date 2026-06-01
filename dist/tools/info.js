@@ -25,3 +25,4 @@ export async function handleGetFileInfo(relPath) {
         return errorContent(`Error retrieving file info: ${err.message}`);
     }
 }
+//# sourceMappingURL=info.js.map

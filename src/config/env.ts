@@ -2,8 +2,13 @@ import { configDotenv } from "dotenv";
 import process from "node:process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomBytes } from "node:crypto";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const scriptDir = path.dirname(
+  typeof __dirname !== "undefined"
+    ? __dirname
+    : fileURLToPath(import.meta.url)
+);
 configDotenv({ path: path.resolve(scriptDir, "../.env") });
 configDotenv();
 
@@ -18,6 +23,16 @@ export interface AppConfig {
   logLevel: string;
   rateLimitMax: number;
   rateLimitWindowMs: number;
+  requestTimeoutMs: number;
+  searchMaxDepth: number;
+  searchMaxFiles: number;
+  searchMaxMatches: number;
+  listMaxDepth: number;
+  listMaxEntries: number;
+  sessionIdleTimeoutMs: number;
+  enableTls: boolean;
+  tlsCertPath: string;
+  tlsKeyPath: string;
 }
 
 function requireEnv(name: string): string {
@@ -31,12 +46,20 @@ function requireEnv(name: string): string {
 
 function intEnv(name: string, fallback: number): number {
   const value = process.env[name];
-  return value ? parseInt(value, 10) : fallback;
+  if (value !== undefined) {
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed) || parsed < 0) {
+      console.error(`[FATAL] ${name} must be a non-negative integer, got "${value}".`);
+      process.exit(1);
+    }
+    return parsed;
+  }
+  return fallback;
 }
 
 const userToken = process.env.AUTH_TOKEN;
 const generatedToken = userToken
-  || Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 10)).join("");
+  || randomBytes(32).toString("hex");
 
 export const config: AppConfig = {
   port: intEnv("PORT", 3544),
@@ -51,4 +74,14 @@ export const config: AppConfig = {
   logLevel: process.env.LOG_LEVEL || "info",
   rateLimitMax: intEnv("RATE_LIMIT_MAX", 100),
   rateLimitWindowMs: intEnv("RATE_LIMIT_WINDOW_MS", 60000),
+  requestTimeoutMs: intEnv("REQUEST_TIMEOUT_MS", 300000),
+  searchMaxDepth: intEnv("SEARCH_MAX_DEPTH", 12),
+  searchMaxFiles: intEnv("SEARCH_MAX_FILES", 2000),
+  searchMaxMatches: intEnv("SEARCH_MAX_MATCHES", 250),
+  listMaxDepth: intEnv("LIST_MAX_DEPTH", 3),
+  listMaxEntries: intEnv("LIST_MAX_ENTRIES", 1000),
+  sessionIdleTimeoutMs: intEnv("SESSION_IDLE_TIMEOUT_MS", 3600000),
+  enableTls: (process.env.ENABLE_TLS || "false").toLowerCase() === "true",
+  tlsCertPath: process.env.TLS_CERT_PATH || "",
+  tlsKeyPath: process.env.TLS_KEY_PATH || "",
 };

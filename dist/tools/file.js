@@ -101,3 +101,4 @@ export async function handleDeletePath(relPath) {
         return errorContent(`Error deleting path: ${err.message}`);
     }
 }
+//# sourceMappingURL=file.js.map

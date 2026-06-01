@@ -1,21 +1,22 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { safeResolve } from "../security/workspace.js";
+import { config } from "../config/env.js";
 import { textContent, errorContent } from "../types/index.js";
-export async function handleListDirectory(relPath, recursive, ignoredPaths, workspaceRoot) {
+export async function handleListDirectory(relPath, recursive, ignoredPaths, _workspaceRoot) {
     try {
         const rootPath = await safeResolve(relPath);
         const results = [];
         let fileCount = 0;
         async function scan(currentPath, depth = 0) {
-            if (depth > 3 || fileCount >= 1000)
+            if (depth > config.listMaxDepth || fileCount >= config.listMaxEntries)
                 return;
             const entries = await fs.readdir(currentPath, { withFileTypes: true });
             for (const entry of entries) {
                 if (ignoredPaths.has(entry.name))
                     continue;
                 fileCount++;
-                if (fileCount >= 1000)
+                if (fileCount >= config.listMaxEntries)
                     break;
                 const fullPath = path.join(currentPath, entry.name);
                 const relativeToRoot = path.relative(rootPath, fullPath);
@@ -59,3 +60,4 @@ export async function handleCreateDirectory(relPath) {
         return errorContent(`Error creating directory: ${error.message}`);
     }
 }
+//# sourceMappingURL=directory.js.map

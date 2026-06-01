@@ -26,3 +26,4 @@ export async function writeAtomic(targetPath, content) {
         throw error;
     }
 }
+//# sourceMappingURL=file.js.map

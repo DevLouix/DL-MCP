@@ -20,17 +20,24 @@ export function rateLimiter(maxRequests: number, windowMs: number) {
   cleanup.unref();
 
   return (req: Request, res: Response, next: NextFunction): void => {
-    const key = req.ip || req.socket.remoteAddress || "unknown";
+    const key = (req as any).requestId || req.ip || req.socket.remoteAddress || "unknown";
     const now = Date.now();
     const entry = buckets.get(key);
 
     if (!entry || entry.resetAt <= now) {
       buckets.set(key, { count: 1, resetAt: now + windowMs });
+      res.setHeader("X-RateLimit-Limit", String(maxRequests));
+      res.setHeader("X-RateLimit-Remaining", String(maxRequests - 1));
+      res.setHeader("X-RateLimit-Reset", String(Math.ceil((now + windowMs) / 1000)));
       next();
       return;
     }
 
     if (entry.count >= maxRequests) {
+      res.setHeader("X-RateLimit-Limit", String(maxRequests));
+      res.setHeader("X-RateLimit-Remaining", "0");
+      res.setHeader("X-RateLimit-Reset", String(Math.ceil(entry.resetAt / 1000)));
+      res.setHeader("Retry-After", String(Math.ceil((entry.resetAt - now) / 1000)));
       res.status(429).json({
         error: "Too many requests. Please slow down.",
         retryAfterMs: entry.resetAt - now,
@@ -39,6 +46,9 @@ export function rateLimiter(maxRequests: number, windowMs: number) {
     }
 
     entry.count++;
+    res.setHeader("X-RateLimit-Limit", String(maxRequests));
+    res.setHeader("X-RateLimit-Remaining", String(maxRequests - entry.count));
+    res.setHeader("X-RateLimit-Reset", String(Math.ceil(entry.resetAt / 1000)));
     next();
   };
 }

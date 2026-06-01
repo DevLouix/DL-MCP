@@ -2,13 +2,35 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { safeResolve } from "../security/workspace.js";
 import { isBinaryBuffer } from "../utils/file.js";
+import { config } from "../config/env.js";
 import { textContent, errorContent } from "../types/index.js";
+const RE_PATTERN_MAX_LENGTH = 200;
+function isRegexSafe(pattern) {
+    if (pattern.length > RE_PATTERN_MAX_LENGTH)
+        return false;
+    const nestedQuantifiers = /\(.+\)(\+|\*|\{.*,.*\})\s*(\+|\*|\{.*,.*\})/;
+    if (nestedQuantifiers.test(pattern))
+        return false;
+    try {
+        const re = new RegExp(pattern);
+        const testInput = "x".repeat(50);
+        const start = performance.now();
+        re.test(testInput);
+        return performance.now() - start < 100;
+    }
+    catch {
+        return false;
+    }
+}
 export async function handleSearchGrep(pattern, scopePath, caseSensitive, ignoredPaths, workspaceRoot, maxFileSize) {
     try {
+        if (!isRegexSafe(pattern)) {
+            return errorContent("Invalid or unsafe search pattern. Patterns must be under 200 characters and not cause excessive backtracking.");
+        }
         const startPath = await safeResolve(scopePath);
         const filesToInspect = [];
         async function walk(currentDir, depth = 0) {
-            if (depth > 12 || filesToInspect.length >= 2000)
+            if (depth > config.searchMaxDepth || filesToInspect.length >= config.searchMaxFiles)
                 return;
             const entries = await fs.readdir(currentDir, { withFileTypes: true });
             for (const entry of entries) {
@@ -26,6 +48,7 @@ export async function handleSearchGrep(pattern, scopePath, caseSensitive, ignore
         await walk(startPath);
         const matches = [];
         const CHUNK_SIZE = 32;
+        const regexp = new RegExp(pattern, caseSensitive ? "" : "i");
         for (let i = 0; i < filesToInspect.length; i += CHUNK_SIZE) {
             const chunk = filesToInspect.slice(i, i + CHUNK_SIZE);
             await Promise.all(chunk.map(async (file) => {
@@ -37,25 +60,25 @@ export async function handleSearchGrep(pattern, scopePath, caseSensitive, ignore
                     if (isBinaryBuffer(buffer))
                         return;
                     const text = buffer.toString("utf-8");
-                    if (!new RegExp(pattern, caseSensitive ? "" : "i").test(text))
+                    if (!regexp.test(text))
                         return;
                     const lines = text.split(/\r?\n/);
                     for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                        if (matches.length >= config.searchMaxMatches)
+                            return;
                         const lineText = lines[lineIndex];
-                        if (new RegExp(pattern, caseSensitive ? "" : "i").test(lineText)) {
+                        if (regexp.test(lineText)) {
                             matches.push({
                                 file: path.relative(workspaceRoot, file),
                                 line: lineIndex + 1,
                                 text: lineText.trim(),
                             });
-                            if (matches.length >= 250)
-                                return;
                         }
                     }
                 }
                 catch { }
             }));
-            if (matches.length >= 250)
+            if (matches.length >= config.searchMaxMatches)
                 break;
         }
         return {
@@ -66,3 +89,4 @@ export async function handleSearchGrep(pattern, scopePath, caseSensitive, ignore
         return errorContent(`Error executing grep search: ${err.message}`);
     }
 }
+//# sourceMappingURL=search.js.map

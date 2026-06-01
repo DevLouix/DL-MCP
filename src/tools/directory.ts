@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { safeResolve } from "../security/workspace.js";
+import { config } from "../config/env.js";
 import type { ToolResult, DirectoryEntry } from "../types/index.js";
 import { textContent, errorContent } from "../types/index.js";
 
@@ -8,7 +9,7 @@ export async function handleListDirectory(
   relPath: string,
   recursive: boolean,
   ignoredPaths: Set<string>,
-  workspaceRoot: string,
+  _workspaceRoot: string,
 ): Promise<ToolResult> {
   try {
     const rootPath = await safeResolve(relPath);
@@ -16,13 +17,13 @@ export async function handleListDirectory(
     let fileCount = 0;
 
     async function scan(currentPath: string, depth = 0) {
-      if (depth > 3 || fileCount >= 1000) return;
+      if (depth > config.listMaxDepth || fileCount >= config.listMaxEntries) return;
       const entries = await fs.readdir(currentPath, { withFileTypes: true });
 
       for (const entry of entries) {
         if (ignoredPaths.has(entry.name)) continue;
         fileCount++;
-        if (fileCount >= 1000) break;
+        if (fileCount >= config.listMaxEntries) break;
 
         const fullPath = path.join(currentPath, entry.name);
         const relativeToRoot = path.relative(rootPath, fullPath);

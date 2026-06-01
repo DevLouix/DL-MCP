@@ -3,9 +3,16 @@ import type { IncomingMessage } from "node:http";
 import type { ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { config } from "../config/env.js";
+
+interface SessionEntry {
+  transport: StreamableHTTPServerTransport;
+  lastUsed: number;
+  idleTimer?: ReturnType<typeof setTimeout>;
+}
 
 export class TransportManager implements Transport {
-  private sessions = new Map<string, StreamableHTTPServerTransport>();
+  private sessions = new Map<string, SessionEntry>();
   private requestIdToSession = new Map<string | number, string>();
 
   onclose?: () => void;
@@ -13,16 +20,38 @@ export class TransportManager implements Transport {
   onmessage?: (message: any, extra?: any) => void;
   setProtocolVersion?: (version: string) => void;
 
+  private touchSession(sessionId: string): void {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) return;
+    entry.lastUsed = Date.now();
+    if (entry.idleTimer) clearTimeout(entry.idleTimer);
+    entry.idleTimer = setTimeout(() => {
+      this.closeSession(sessionId);
+    }, config.sessionIdleTimeoutMs);
+    entry.idleTimer.unref();
+  }
+
+  private closeSession(sessionId: string): void {
+    const entry = this.sessions.get(sessionId);
+    if (!entry) return;
+    if (entry.idleTimer) clearTimeout(entry.idleTimer);
+    entry.transport.close().catch(() => {});
+    this.sessions.delete(sessionId);
+    for (const [reqId, sid] of this.requestIdToSession) {
+      if (sid === sessionId) this.requestIdToSession.delete(reqId);
+    }
+  }
+
   async handleRequest(req: IncomingMessage, res: ServerResponse, parsedBody?: unknown): Promise<void> {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
-    if (sessionId && this.sessions.has(sessionId)) {
-      const transport = this.sessions.get(sessionId)!;
-      await transport.handleRequest(req, res, parsedBody);
-      return;
-    }
-
     if (sessionId) {
+      const entry = this.sessions.get(sessionId);
+      if (entry) {
+        this.touchSession(sessionId);
+        await entry.transport.handleRequest(req, res, parsedBody);
+        return;
+      }
       res.statusCode = 404;
       res.end(JSON.stringify({ error: "Session not found" }));
       return;
@@ -31,17 +60,23 @@ export class TransportManager implements Transport {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (newSessionId: string) => {
-        this.sessions.set(newSessionId, transport);
+        const entry: SessionEntry = { transport, lastUsed: Date.now() };
+        const timer = setTimeout(() => this.closeSession(newSessionId), config.sessionIdleTimeoutMs);
+        timer.unref();
+        entry.idleTimer = timer;
+        this.sessions.set(newSessionId, entry);
       },
       onsessionclosed: (closedSessionId: string) => {
-        this.sessions.delete(closedSessionId);
+        this.closeSession(closedSessionId);
       },
     });
 
     transport.onmessage = (message, extra) => {
       const msg = message as Record<string, unknown>;
       if (msg.id !== undefined) {
-        this.requestIdToSession.set(String(msg.id), transport.sessionId!);
+        if (transport.sessionId) {
+          this.requestIdToSession.set(String(msg.id), transport.sessionId);
+        }
       }
       this.onmessage?.(message, extra);
     };
@@ -54,9 +89,9 @@ export class TransportManager implements Transport {
   async start(): Promise<void> {}
 
   async close(): Promise<void> {
-    await Promise.all(Array.from(this.sessions.values()).map((t) => t.close()));
-    this.sessions.clear();
-    this.requestIdToSession.clear();
+    for (const sid of this.sessions.keys()) {
+      this.closeSession(sid);
+    }
   }
 
   async send(message: any, options?: any): Promise<void> {
@@ -67,23 +102,25 @@ export class TransportManager implements Transport {
 
     if (requestId !== undefined) {
       const sid = this.requestIdToSession.get(String(requestId));
-      const transport = sid ? this.sessions.get(sid) : undefined;
-      if (transport) {
-        await transport.send(message, options);
-        return;
+      if (sid) {
+        const entry = this.sessions.get(sid);
+        if (entry) {
+          this.touchSession(sid);
+          await entry.transport.send(message, options);
+          return;
+        }
       }
     }
 
-    for (const transport of this.sessions.values()) {
+    for (const entry of this.sessions.values()) {
       try {
-        await transport.send(message, options);
-      } catch {
-        // continue
-      }
+        await entry.transport.send(message, options);
+      } catch {}
     }
   }
 
   get sessionId(): string | undefined {
-    return this.sessions.size > 0 ? Array.from(this.sessions.values())[0].sessionId : undefined;
+    for (const sid of this.sessions.keys()) return sid;
+    return undefined;
   }
 }
