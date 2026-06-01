@@ -42,7 +42,13 @@ async function main() {
         console.error("=".repeat(60));
         console.error(`  Endpoint:  ${proto}://localhost:${config.port}/sse`);
         console.error(`  Workspace: ${config.workspaceRoot}`);
-        console.error(`  Auth:      ${process.env.AUTH_TOKEN ? "configured" : "auto-generated (check stderr on first run)"}`);
+        if (!process.env.AUTH_TOKEN) {
+            console.error(`  Auth Token: ${config.authToken}`);
+            console.error(`  ⚠  Save this token — it is generated once and lost on restart`);
+        }
+        else {
+            console.error(`  Auth:      configured`);
+        }
         console.error("=".repeat(60));
     });
     registerShutdown(server, transportManager, appCleanup, logger);
