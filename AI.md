@@ -11,8 +11,9 @@ Enterprise-grade MCP (Model Context Protocol) server exposing a filesystem via t
 ```
 src/
 ├── index.ts              # Entry: wires McpServer, TransportManager, Express, TLS, shutdown
-├── constants.ts          # SERVER_NAME, SERVER_VERSION
+├── constants.ts          # SERVER_NAME, SERVER_VERSION (from package.json)
 ├── config/
+│   ├── cli.ts            # CLI flag parser (--workspace, --port, etc.)
 │   └── env.ts            # All config with env-var overrides (20+ variables)
 ├── server/
 │   ├── app.ts            # Express app: middleware stack, /health, /sse, error handler
@@ -38,8 +39,10 @@ src/
 │   ├── workspace.ts      # safeResolve — path traversal prevention
 │   └── network.ts        # CIDR-based private-IP blocking
 ├── utils/
-│   └── file.ts           # isBinaryBuffer, writeAtomic
+│   ├── file.ts           # isBinaryBuffer, writeAtomic
+│   └── netinfo.ts        # Server URL discovery (hostname, NIC IPs)
 └── types/
+    ├── express.d.ts      # Express Request augmentation (requestId)
     └── index.ts          # Shared types
 ```
 
@@ -99,6 +102,59 @@ npm run release        # bundle + pkg:all
 git tag v1.2.0
 git push origin v1.2.0 # triggers .github/workflows/release.yml
 ```
+
+---
+
+## CLI Usage
+
+The compiled binary accepts all config as CLI flags (overrides `.env`):
+
+```bash
+# Full flag syntax
+./dl-mcp-linux --workspace /data --port 3544 --auth-token my-secret
+
+# Equals syntax
+./dl-mcp-linux --workspace=/data --port=3544
+
+# Short flags
+./dl-mcp-linux -w /data -p 3544
+
+# Help
+./dl-mcp-linux --help
+```
+
+All flags, their short aliases, mapped env vars, and descriptions are shown in `--help`.
+
+**Precedence** (highest to lowest):
+1. CLI flags
+2. `.env` file
+3. Environment variables
+4. Default values
+
+## Startup Banner
+
+On startup the server prints all reachable URLs:
+
+```
+============================================================
+  DL-MCP Enterprise Filesystem Server
+============================================================
+  Version:   1.2.0
+  Workspace: /workspaces/DL-MCP
+  Local     http://localhost:3544/sse
+  Hostname  http://myhost:3544/sse
+  eth0      http://10.0.1.185:3544/sse
+  Auth:      e3cf... (or "configured")
+  ⚠  Save this token — it is generated once and lost on restart
+============================================================
+```
+
+- **Local**: loopback address (always shown)
+- **Hostname**: machine hostname (if resolvable)
+- **eth0** etc.: each non-internal IPv4 network interface
+- **Public**: shown only if `PUBLIC_URL` env var is set (for reverse proxy)
+
+Set `PUBLIC_URL=https://mydomain.com` in `.env` to display a public-facing URL.
 
 ---
 
@@ -224,6 +280,7 @@ server.registerResource(
 | `SESSION_IDLE_TIMEOUT_MS` | `3600000` | Session TTL (1h) |
 | `ENABLE_TLS` | `false` | HTTPS server |
 | `TLS_CERT_PATH` / `TLS_KEY_PATH` | — | PEM paths |
+| `PUBLIC_URL` | — | Public URL for reverse proxy display |
 | `LOG_LEVEL` | `info` | pino log level |
 | `SEARCH_MAX_DEPTH` | `12` | grep directory recursion |
 | `SEARCH_MAX_FILES` | `2000` | Max files to scan |
@@ -294,7 +351,7 @@ dist/bundle.cjs (1.5 MB single file)
 - **Async**: prefer `async/await` over raw promises; use `Promise.all()` for parallel I/O
 - **Config**: import only needed values: `import { config } from "../config/env.js"` (destructure in usage)
 - **Logger**: use pino structured logging: `logger.info({ key: value }, "message")`
-- **Types**: avoid `any` — use `Record<string, unknown>` for dynamic objects, augment Express types via `declare global`
+- **Types**: avoid `any` — use `Record<string, unknown>` for dynamic objects; augment Express types via `src/types/express.d.ts` (not `declare global` in source files)
 - **No dead params**: prefix unused callback params with `_` (e.g., `_req`, `_next`)
 - **Zod schemas**: define inline in tool/prompt registration (do not extract to separate files)
 - **Rate limiter cleanup**: interval `unref()` so it doesn't keep the process alive; cleanup called on shutdown

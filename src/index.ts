@@ -13,6 +13,7 @@ import { createServer as createHttpServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import { SERVER_NAME, SERVER_VERSION } from "./constants.js";
 import { getServerUrls } from "./utils/netinfo.js";
+import { startLocalTunnel, launchTunnel } from "./utils/tunnel.js";
 
 async function main(): Promise<void> {
   const logger: Logger = pino({
@@ -71,6 +72,30 @@ async function main(): Promise<void> {
       console.error(`  Auth:      configured`);
     }
     console.error("=".repeat(60));
+    // Optionally start a tunnel if requested via the app config.
+    (async () => {
+      try {
+        const tunnelCmd = config.tunnelCmd;
+        const ltSub = config.localtunnelSubdomain;
+        const ltAuto = config.localtunnelAuto;
+        if (tunnelCmd) {
+          const stop = launchTunnel(tunnelCmd, (url) => {
+            if (!config.publicUrl) config.publicUrl = url;
+            logger.info({ url }, "Tunnel started (cmd)");
+          }, logger as unknown as any);
+          (server as any).__tunnelStop = stop;
+        } else if (ltSub !== "" || ltAuto) {
+          const subToUse = ltSub === "" ? undefined : ltSub;
+          const stop = await startLocalTunnel(config.port, subToUse, (url) => {
+            if (!config.publicUrl) config.publicUrl = url;
+            logger.info({ url }, "LocalTunnel started");
+          }, logger as unknown as any);
+          (server as any).__tunnelStop = stop ?? null;
+        }
+      } catch (e) {
+        logger.warn({ err: (e as Error).message }, "Failed to start tunnel");
+      }
+    })();
   });
 
   registerShutdown(server, transportManager, appCleanup, logger);
@@ -79,6 +104,16 @@ async function main(): Promise<void> {
 function registerShutdown(server: any, transportManager: TransportManager, cleanup: () => void, logger: Logger): void {
   function shutdown(signal: string) {
     logger.info({ signal }, "Shutdown signal received");
+    // Stop any tunnel that was started and stored on the server object.
+    try {
+      const stopTunnel = (server as any).__tunnelStop as (() => void) | null | undefined;
+      if (stopTunnel) {
+        stopTunnel();
+      }
+    } catch (e) {
+      logger.warn({ err: (e as Error).message }, "Error stopping tunnel");
+    }
+
     cleanup();
     server.close(async () => {
       await transportManager.close();

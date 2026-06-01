@@ -25,6 +25,9 @@ const flagMap: Record<string, [string, string]> = {
   "--tls-key":              ["TLS_KEY_PATH", "Path to TLS key PEM"],
   "--public-url":           ["PUBLIC_URL", "Public URL (reverse proxy)"],
   "--ignored-paths":        ["IGNORED_PATHS", "Comma-separated ignored paths"],
+  "--tunnel-cmd":           ["TUNNEL_CMD", "Command to run to expose the server (e.g., 'ngrok http 3000')"],
+  "--localtunnel-subdomain": ["LOCALTUNNEL_SUBDOMAIN", "Requested localtunnel subdomain (optional)"],
+  "--localtunnel-auto":     ["LOCALTUNNEL_AUTO", "Auto-create a localtunnel (true/false)"],
 };
 
 function printHelp(): void {

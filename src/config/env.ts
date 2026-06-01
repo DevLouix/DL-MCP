@@ -34,6 +34,9 @@ export interface AppConfig {
   tlsCertPath: string;
   tlsKeyPath: string;
   publicUrl: string;
+  tunnelCmd: string;
+  localtunnelSubdomain: string;
+  localtunnelAuto: boolean;
 }
 
 function requireEnv(name: string): string {
@@ -86,4 +89,12 @@ export const config: AppConfig = {
   tlsCertPath: process.env.TLS_CERT_PATH || "",
   tlsKeyPath: process.env.TLS_KEY_PATH || "",
   publicUrl: process.env.PUBLIC_URL || "",
+  tunnelCmd: process.env.TUNNEL_CMD || "",
+  localtunnelSubdomain: process.env.LOCALTUNNEL_SUBDOMAIN || "",
+  // Default to true when not specified so CLI behavior auto-enables localtunnel.
+  localtunnelAuto: (() => {
+    const raw = process.env.LOCALTUNNEL_AUTO;
+    if (raw === undefined) return true;
+    return (raw || "").toLowerCase() === "true" || raw === "1";
+  })(),
 };
