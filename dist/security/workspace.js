@@ -11,9 +11,11 @@ export async function safeResolve(inputPath) {
     const absolutePath = path.isAbsolute(inputPath)
         ? path.resolve(inputPath)
         : path.resolve(workspaceRoot, inputPath);
-    const canonicalWorkspace = await fs.realpath(workspaceRoot);
-    try {
-        const canonicalTarget = await fs.realpath(absolutePath);
+    const [canonicalWorkspace, canonicalTarget] = await Promise.all([
+        fs.realpath(workspaceRoot).catch(() => path.resolve(workspaceRoot)),
+        fs.realpath(absolutePath).catch(() => null),
+    ]);
+    if (canonicalTarget) {
         const isWithin = canonicalTarget === canonicalWorkspace
             || canonicalTarget.startsWith(canonicalWorkspace + path.sep);
         if (!isWithin) {
@@ -21,32 +23,21 @@ export async function safeResolve(inputPath) {
         }
         return canonicalTarget;
     }
-    catch (err) {
-        if (err.code === "ENOENT") {
-            let parentDir = path.dirname(absolutePath);
-            let canonicalParent = null;
-            while (parentDir !== path.dirname(parentDir)) {
-                try {
-                    canonicalParent = await fs.realpath(parentDir);
-                    break;
-                }
-                catch {
-                    parentDir = path.dirname(parentDir);
-                }
-            }
-            if (canonicalParent) {
-                const isWithin = canonicalParent === canonicalWorkspace
-                    || canonicalParent.startsWith(canonicalWorkspace + path.sep);
-                if (!isWithin) {
-                    throw new Error(`Access Denied: The destination parent directory is outside the workspace.`);
-                }
-            }
-            else {
-                throw new Error("Access Denied: Unable to establish path security context.");
+    let parentDir = path.dirname(absolutePath);
+    while (parentDir !== path.dirname(parentDir)) {
+        try {
+            const canonicalParent = await fs.realpath(parentDir);
+            const isWithin = canonicalParent === canonicalWorkspace
+                || canonicalParent.startsWith(canonicalWorkspace + path.sep);
+            if (!isWithin) {
+                throw new Error(`Access Denied: The destination parent directory is outside the workspace.`);
             }
             return absolutePath;
         }
-        throw err;
+        catch {
+            parentDir = path.dirname(parentDir);
+        }
     }
+    throw new Error("Access Denied: Unable to establish path security context.");
 }
 //# sourceMappingURL=workspace.js.map

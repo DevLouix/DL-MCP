@@ -8,7 +8,7 @@ interface BucketEntry {
 export function rateLimiter(maxRequests: number, windowMs: number) {
   const buckets = new Map<string, BucketEntry>();
 
-  const cleanup = setInterval(() => {
+  const cleanupTimer = setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of buckets) {
       if (entry.resetAt <= now) {
@@ -17,9 +17,10 @@ export function rateLimiter(maxRequests: number, windowMs: number) {
     }
   }, windowMs);
 
-  cleanup.unref();
+  cleanupTimer.unref();
 
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return {
+    middleware: (req: Request, res: Response, next: NextFunction): void => {
     const key = (req as any).requestId || req.ip || req.socket.remoteAddress || "unknown";
     const now = Date.now();
     const entry = buckets.get(key);
@@ -49,6 +50,8 @@ export function rateLimiter(maxRequests: number, windowMs: number) {
     res.setHeader("X-RateLimit-Limit", String(maxRequests));
     res.setHeader("X-RateLimit-Remaining", String(maxRequests - entry.count));
     res.setHeader("X-RateLimit-Reset", String(Math.ceil(entry.resetAt / 1000)));
-    next();
+      next();
+    },
+    cleanup: () => clearInterval(cleanupTimer),
   };
 }

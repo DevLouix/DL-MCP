@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { safeResolve } from "../security/workspace.js";
 import { config } from "../config/env.js";
 import { textContent, errorContent } from "../types/index.js";
-export async function handleListDirectory(relPath, recursive, ignoredPaths, _workspaceRoot) {
+export async function handleListDirectory(relPath, recursive, ignoredPaths) {
     try {
         const rootPath = await safeResolve(relPath);
         const results = [];

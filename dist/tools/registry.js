@@ -38,7 +38,7 @@ export function registerAllTools(server, logger) {
             path: z.string().default("").describe("Relative path to inspect inside the workspace"),
             recursive: z.boolean().optional().default(false).describe("List all subdirectories recursively up to safety bounds"),
         },
-    }, withAuditLog("list_directory", ({ path: relPath, recursive }) => handleListDirectory(relPath, recursive, config.ignoredPaths, config.workspaceRoot), logger));
+    }, withAuditLog("list_directory", ({ path: relPath, recursive }) => handleListDirectory(relPath, recursive, config.ignoredPaths), logger));
     server.registerTool("read_file", {
         description: "Read the full contents of a text file inside the workspace root. Rejects files larger than 5MB.",
         inputSchema: {

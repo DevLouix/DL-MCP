@@ -10,6 +10,7 @@ import { createApp } from "./server/app.js";
 import { readFileSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
+import { SERVER_NAME, SERVER_VERSION } from "./constants.js";
 async function main() {
     const logger = pino({
         level: config.logLevel,
@@ -21,15 +22,15 @@ async function main() {
     });
     setWorkspaceRoot(config.workspaceRoot);
     const mcpServer = new McpServer({
-        name: "enterprise-filesystem-mcp",
-        version: "1.2.0",
+        name: SERVER_NAME,
+        version: SERVER_VERSION,
     });
     registerAllTools(mcpServer, logger);
     registerAllPrompts(mcpServer, logger);
     registerAllResources(mcpServer, logger);
     const transportManager = new TransportManager();
     await mcpServer.connect(transportManager);
-    const app = createApp(transportManager, logger);
+    const { app, cleanup: appCleanup } = createApp(transportManager, logger);
     const proto = config.enableTls ? "https" : "http";
     const server = config.enableTls
         ? createHttpsServer({ cert: readFileSync(config.tlsCertPath), key: readFileSync(config.tlsKeyPath) }, app)
@@ -41,16 +42,15 @@ async function main() {
         console.error("=".repeat(60));
         console.error(`  Endpoint:  ${proto}://localhost:${config.port}/sse`);
         console.error(`  Workspace: ${config.workspaceRoot}`);
-        if (!process.env.AUTH_TOKEN) {
-            console.error(`  Auth Token: ${config.authToken}`);
-        }
+        console.error(`  Auth:      ${process.env.AUTH_TOKEN ? "configured" : "auto-generated (check stderr on first run)"}`);
         console.error("=".repeat(60));
     });
-    registerShutdown(server, transportManager, logger);
+    registerShutdown(server, transportManager, appCleanup, logger);
 }
-function registerShutdown(server, transportManager, logger) {
+function registerShutdown(server, transportManager, cleanup, logger) {
     function shutdown(signal) {
         logger.info({ signal }, "Shutdown signal received");
+        cleanup();
         server.close(async () => {
             await transportManager.close();
             logger.info("Server shut down gracefully");

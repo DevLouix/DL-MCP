@@ -4,10 +4,24 @@ import { config } from "../config/env.js";
 export class TransportManager {
     sessions = new Map();
     requestIdToSession = new Map();
+    /** Serialises access to session maps to avoid race conditions */
+    mutex = Promise.resolve();
     onclose;
     onerror;
     onmessage;
     setProtocolVersion;
+    async withLock(fn) {
+        const prev = this.mutex;
+        let release;
+        this.mutex = new Promise((r) => { release = r; });
+        await prev;
+        try {
+            return await fn();
+        }
+        finally {
+            release();
+        }
+    }
     touchSession(sessionId) {
         const entry = this.sessions.get(sessionId);
         if (!entry)
@@ -74,9 +88,11 @@ export class TransportManager {
     }
     async start() { }
     async close() {
-        for (const sid of this.sessions.keys()) {
-            this.closeSession(sid);
-        }
+        await this.withLock(async () => {
+            for (const sid of this.sessions.keys()) {
+                this.closeSession(sid);
+            }
+        });
     }
     async send(message, options) {
         let requestId = options?.relatedRequestId;
@@ -102,8 +118,6 @@ export class TransportManager {
         }
     }
     get sessionId() {
-        for (const sid of this.sessions.keys())
-            return sid;
         return undefined;
     }
 }

@@ -9,7 +9,6 @@ export async function handleListDirectory(
   relPath: string,
   recursive: boolean,
   ignoredPaths: Set<string>,
-  _workspaceRoot: string,
 ): Promise<ToolResult> {
   try {
     const rootPath = await safeResolve(relPath);

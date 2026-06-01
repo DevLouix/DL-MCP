@@ -10,8 +10,17 @@ import { authMiddleware } from "../middleware/auth.js";
 import { rateLimiter } from "../middleware/rateLimiter.js";
 import { requestIdMiddleware } from "../middleware/requestId.js";
 import type { Logger } from "../types/index.js";
+import { SERVER_VERSION } from "../constants.js";
 
-morgan.token("request-id", (req: any) => req.requestId || "-");
+declare global {
+  namespace Express {
+    interface Request {
+      requestId: string;
+    }
+  }
+}
+
+morgan.token("request-id", (req: Request) => req.requestId || "-");
 
 export function createApp(transportManager: TransportManager, logger: Logger) {
   const app = express();
@@ -23,7 +32,10 @@ export function createApp(transportManager: TransportManager, logger: Logger) {
   app.use(requestIdMiddleware);
   app.use(morgan(':request-id :method :url :status :res[content-length] - :response-time ms'));
   app.use(express.json({ limit: `${config.maxFileSize}B` }));
-  app.use(rateLimiter(config.rateLimitMax, config.rateLimitWindowMs));
+  const { middleware: rateLimitMiddleware, cleanup: rateLimitCleanup } = rateLimiter(
+    config.rateLimitMax, config.rateLimitWindowMs,
+  );
+  app.use(rateLimitMiddleware);
 
   app.get("/health", async (_req: Request, res: Response) => {
     const checks: Record<string, string> = {};
@@ -38,15 +50,12 @@ export function createApp(transportManager: TransportManager, logger: Logger) {
       healthy = false;
     }
 
-    const sessionCount = (transportManager as any).sessions?.size ?? 0;
-
     res.json({
       status: healthy ? "ok" : "degraded",
-      version: "1.2.0",
+      version: SERVER_VERSION,
       uptime: process.uptime(),
       workspace: config.workspaceRoot,
       checks,
-      sessions: sessionCount,
     });
   });
 
@@ -58,19 +67,19 @@ export function createApp(transportManager: TransportManager, logger: Logger) {
         req.body,
       );
     } catch (err: any) {
-      logger.error({ err: err.message, stack: err.stack, requestId: (req as any).requestId }, "Streamable HTTP request failed");
+      logger.error({ err: err.message, stack: err.stack, requestId: req.requestId }, "Streamable HTTP request failed");
       if (!res.headersSent) {
-        res.status(500).send("Internal error");
+        res.status(500).json({ error: "Internal error" });
       }
     }
   });
 
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-    logger.error({ err: err.message, stack: err.stack, requestId: (req as any).requestId }, "Unhandled error");
+    logger.error({ err: err.message, stack: err.stack, requestId: req.requestId }, "Unhandled error");
     if (!res.headersSent) {
       res.status(500).json({ error: "Internal server error" });
     }
   });
 
-  return app;
+  return { app, cleanup: () => { rateLimitCleanup(); } };
 }

@@ -6,6 +6,7 @@ import { config } from "../config/env.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { rateLimiter } from "../middleware/rateLimiter.js";
 import { requestIdMiddleware } from "../middleware/requestId.js";
+import { SERVER_VERSION } from "../constants.js";
 morgan.token("request-id", (req) => req.requestId || "-");
 export function createApp(transportManager, logger) {
     const app = express();
@@ -15,7 +16,8 @@ export function createApp(transportManager, logger) {
     app.use(requestIdMiddleware);
     app.use(morgan(':request-id :method :url :status :res[content-length] - :response-time ms'));
     app.use(express.json({ limit: `${config.maxFileSize}B` }));
-    app.use(rateLimiter(config.rateLimitMax, config.rateLimitWindowMs));
+    const { middleware: rateLimitMiddleware, cleanup: rateLimitCleanup } = rateLimiter(config.rateLimitMax, config.rateLimitWindowMs);
+    app.use(rateLimitMiddleware);
     app.get("/health", async (_req, res) => {
         const checks = {};
         let healthy = true;
@@ -28,14 +30,12 @@ export function createApp(transportManager, logger) {
             checks.filesystem = "unreachable";
             healthy = false;
         }
-        const sessionCount = transportManager.sessions?.size ?? 0;
         res.json({
             status: healthy ? "ok" : "degraded",
-            version: "1.2.0",
+            version: SERVER_VERSION,
             uptime: process.uptime(),
             workspace: config.workspaceRoot,
             checks,
-            sessions: sessionCount,
         });
     });
     app.all("/sse", authMiddleware(config.authToken), async (req, res) => {
@@ -45,7 +45,7 @@ export function createApp(transportManager, logger) {
         catch (err) {
             logger.error({ err: err.message, stack: err.stack, requestId: req.requestId }, "Streamable HTTP request failed");
             if (!res.headersSent) {
-                res.status(500).send("Internal error");
+                res.status(500).json({ error: "Internal error" });
             }
         }
     });
@@ -55,6 +55,6 @@ export function createApp(transportManager, logger) {
             res.status(500).json({ error: "Internal server error" });
         }
     });
-    return app;
+    return { app, cleanup: () => { rateLimitCleanup(); } };
 }
 //# sourceMappingURL=app.js.map

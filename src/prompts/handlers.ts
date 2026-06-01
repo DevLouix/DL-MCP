@@ -120,11 +120,11 @@ export async function handleExplainFile(args: { path: string }): Promise<GetProm
     ``,
     `### Structure`,
     ``,
-    extractStructure(content, ext),
+    extractStructure(content),
   ].join("\n"));
 }
 
-function extractStructure(content: string, _ext: string): string {
+function extractStructure(content: string): string {
   const lines = content.split("\n");
   const exports: string[] = [];
   const classes: string[] = [];
@@ -156,30 +156,35 @@ export async function handleReviewChanges(_args: { path?: string }): Promise<Get
     return text("Not a git repository or .git not accessible.");
   }
 
-  const { execSync } = await import("node:child_process");
+  const { exec } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const execAsync = promisify(exec);
 
-  let diff: string;
-  try {
-    diff = execSync("git diff --stat", { cwd: config.workspaceRoot, encoding: "utf-8", maxBuffer: 1024 * 1024 });
-  } catch {
-    return text("Could not get git diff.");
+  const run = async (cmd: string): Promise<string> => {
+    try {
+      const { stdout } = await execAsync(cmd, { cwd: config.workspaceRoot, encoding: "utf-8", maxBuffer: 1024 * 1024 });
+      return stdout;
+    } catch {
+      return "";
+    }
+  };
+
+  const [diff, staged, branch, lastCommit] = await Promise.all([
+    run("git diff --stat"),
+    run("git diff --cached --stat"),
+    run("git rev-parse --abbrev-ref HEAD"),
+    run("git log -1 --oneline"),
+  ]);
+
+  if (!diff && !staged) {
+    return text("No changes detected or could not get git diff.");
   }
-
-  let staged: string;
-  try {
-    staged = execSync("git diff --cached --stat", { cwd: config.workspaceRoot, encoding: "utf-8", maxBuffer: 1024 * 1024 });
-  } catch {
-    staged = "";
-  }
-
-  const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: config.workspaceRoot, encoding: "utf-8" }).trim();
-  const lastCommit = execSync("git log -1 --oneline", { cwd: config.workspaceRoot, encoding: "utf-8", maxBuffer: 1024 * 1024 }).trim();
 
   const sections: string[] = [
     `## Code Review: ${branch}`,
     ``,
     `**Branch:** ${branch}`,
-    `**Last Commit:** ${lastCommit}`,
+    `**Last Commit:** ${lastCommit.trim() || "N/A"}`,
     ``,
   ];
 

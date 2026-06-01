@@ -120,10 +120,10 @@ export async function handleExplainFile(args) {
         ``,
         `### Structure`,
         ``,
-        extractStructure(content, ext),
+        extractStructure(content),
     ].join("\n"));
 }
-function extractStructure(content, _ext) {
+function extractStructure(content) {
     const lines = content.split("\n");
     const exports = [];
     const classes = [];
@@ -157,28 +157,32 @@ export async function handleReviewChanges(_args) {
     catch {
         return text("Not a git repository or .git not accessible.");
     }
-    const { execSync } = await import("node:child_process");
-    let diff;
-    try {
-        diff = execSync("git diff --stat", { cwd: config.workspaceRoot, encoding: "utf-8", maxBuffer: 1024 * 1024 });
+    const { exec } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const execAsync = promisify(exec);
+    const run = async (cmd) => {
+        try {
+            const { stdout } = await execAsync(cmd, { cwd: config.workspaceRoot, encoding: "utf-8", maxBuffer: 1024 * 1024 });
+            return stdout;
+        }
+        catch {
+            return "";
+        }
+    };
+    const [diff, staged, branch, lastCommit] = await Promise.all([
+        run("git diff --stat"),
+        run("git diff --cached --stat"),
+        run("git rev-parse --abbrev-ref HEAD"),
+        run("git log -1 --oneline"),
+    ]);
+    if (!diff && !staged) {
+        return text("No changes detected or could not get git diff.");
     }
-    catch {
-        return text("Could not get git diff.");
-    }
-    let staged;
-    try {
-        staged = execSync("git diff --cached --stat", { cwd: config.workspaceRoot, encoding: "utf-8", maxBuffer: 1024 * 1024 });
-    }
-    catch {
-        staged = "";
-    }
-    const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: config.workspaceRoot, encoding: "utf-8" }).trim();
-    const lastCommit = execSync("git log -1 --oneline", { cwd: config.workspaceRoot, encoding: "utf-8", maxBuffer: 1024 * 1024 }).trim();
     const sections = [
         `## Code Review: ${branch}`,
         ``,
         `**Branch:** ${branch}`,
-        `**Last Commit:** ${lastCommit}`,
+        `**Last Commit:** ${lastCommit.trim() || "N/A"}`,
         ``,
     ];
     if (staged.trim()) {

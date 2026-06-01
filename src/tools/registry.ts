@@ -48,12 +48,12 @@ export function registerAllTools(server: McpServer, logger: Logger): void {
         recursive: z.boolean().optional().default(false).describe("List all subdirectories recursively up to safety bounds"),
       },
     },
-    withAuditLog<{ path: string; recursive: boolean }>(
-      "list_directory",
-      ({ path: relPath, recursive }) =>
-        handleListDirectory(relPath, recursive, config.ignoredPaths, config.workspaceRoot),
-      logger,
-    ),
+      withAuditLog<{ path: string; recursive: boolean }>(
+        "list_directory",
+        ({ path: relPath, recursive }) =>
+          handleListDirectory(relPath, recursive, config.ignoredPaths),
+        logger,
+      ),
   );
 
   server.registerTool(

@@ -14,11 +14,25 @@ interface SessionEntry {
 export class TransportManager implements Transport {
   private sessions = new Map<string, SessionEntry>();
   private requestIdToSession = new Map<string | number, string>();
+  /** Serialises access to session maps to avoid race conditions */
+  private mutex: Promise<void> = Promise.resolve();
 
   onclose?: () => void;
   onerror?: (error: Error) => void;
   onmessage?: (message: any, extra?: any) => void;
   setProtocolVersion?: (version: string) => void;
+
+  private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    const prev = this.mutex;
+    let release: () => void;
+    this.mutex = new Promise<void>((r) => { release = r; });
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release!();
+    }
+  }
 
   private touchSession(sessionId: string): void {
     const entry = this.sessions.get(sessionId);
@@ -89,9 +103,11 @@ export class TransportManager implements Transport {
   async start(): Promise<void> {}
 
   async close(): Promise<void> {
-    for (const sid of this.sessions.keys()) {
-      this.closeSession(sid);
-    }
+    await this.withLock(async () => {
+      for (const sid of this.sessions.keys()) {
+        this.closeSession(sid);
+      }
+    });
   }
 
   async send(message: any, options?: any): Promise<void> {
@@ -120,7 +136,6 @@ export class TransportManager implements Transport {
   }
 
   get sessionId(): string | undefined {
-    for (const sid of this.sessions.keys()) return sid;
     return undefined;
   }
 }
