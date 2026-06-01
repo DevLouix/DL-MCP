@@ -18,6 +18,7 @@ const result = await esbuild.build({
   banner: {
     js: `// DL-MCP v${pkg.version} - Enterprise Filesystem MCP Server`,
   },
+
 });
 
 if (result.errors.length > 0) {

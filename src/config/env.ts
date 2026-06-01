@@ -1,15 +1,13 @@
 import { configDotenv } from "dotenv";
 import process from "node:process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 
-const scriptDir = path.dirname(
-  typeof __dirname !== "undefined"
-    ? __dirname
-    : fileURLToPath(import.meta.url)
-);
+const scriptDir = typeof __dirname !== "undefined"
+  ? __dirname
+  : path.dirname(process.argv[1]);
 configDotenv({ path: path.resolve(scriptDir, "../.env") });
+configDotenv();
 configDotenv();
 
 export interface AppConfig {
