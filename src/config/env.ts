@@ -30,6 +30,7 @@ export interface AppConfig {
   enableTls: boolean;
   tlsCertPath: string;
   tlsKeyPath: string;
+  publicUrl: string;
 }
 
 function requireEnv(name: string): string {
@@ -81,4 +82,5 @@ export const config: AppConfig = {
   enableTls: (process.env.ENABLE_TLS || "false").toLowerCase() === "true",
   tlsCertPath: process.env.TLS_CERT_PATH || "",
   tlsKeyPath: process.env.TLS_KEY_PATH || "",
+  publicUrl: process.env.PUBLIC_URL || "",
 };
