@@ -72,9 +72,13 @@ async function main(): Promise<void> {
       console.error(`  Auth:      configured`);
     }
     console.error("=".repeat(60));
-    // Optionally start a tunnel if requested via the app config.
+    // Optionally start a tunnel if requested via the app config and enabled.
     (async () => {
       try {
+        if (!config.tunnelEnabled) {
+          logger.info("Tunnel startup disabled by configuration");
+          return;
+        }
         const tunnelCmd = config.tunnelCmd;
         const ltSub = config.localtunnelSubdomain;
         const ltAuto = config.localtunnelAuto;

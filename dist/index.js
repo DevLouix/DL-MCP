@@ -11,6 +11,8 @@ import { readFileSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import { SERVER_NAME, SERVER_VERSION } from "./constants.js";
+import { getServerUrls } from "./utils/netinfo.js";
+import { startLocalTunnel, launchTunnel } from "./utils/tunnel.js";
 async function main() {
     const logger = pino({
         level: config.logLevel,
@@ -40,22 +42,71 @@ async function main() {
         console.error("=".repeat(60));
         console.error("  DL-MCP Enterprise Filesystem Server");
         console.error("=".repeat(60));
-        console.error(`  Endpoint:  ${proto}://localhost:${config.port}/sse`);
+        console.error(`  Version:   ${SERVER_VERSION}`);
         console.error(`  Workspace: ${config.workspaceRoot}`);
+        const urls = getServerUrls(config.port, proto);
+        if (config.publicUrl) {
+            console.error(`  Public:    ${config.publicUrl}/sse`);
+        }
+        for (const u of urls) {
+            console.error(`  ${u.label.padEnd(9)} ${u.url}`);
+        }
         if (!process.env.AUTH_TOKEN) {
-            console.error(`  Auth Token: ${config.authToken}`);
+            console.error(`  Auth:      ${config.authToken}`);
             console.error(`  ⚠  Save this token — it is generated once and lost on restart`);
         }
         else {
             console.error(`  Auth:      configured`);
         }
         console.error("=".repeat(60));
+        // Optionally start a tunnel if requested via the app config and enabled.
+        (async () => {
+            try {
+                if (!config.tunnelEnabled) {
+                    logger.info("Tunnel startup disabled by configuration");
+                    return;
+                }
+                const tunnelCmd = config.tunnelCmd;
+                const ltSub = config.localtunnelSubdomain;
+                const ltAuto = config.localtunnelAuto;
+                if (tunnelCmd) {
+                    const stop = launchTunnel(tunnelCmd, (url) => {
+                        if (!config.publicUrl)
+                            config.publicUrl = url;
+                        logger.info({ url }, "Tunnel started (cmd)");
+                    }, logger);
+                    server.__tunnelStop = stop;
+                }
+                else if (ltSub !== "" || ltAuto) {
+                    const subToUse = ltSub === "" ? undefined : ltSub;
+                    const stop = await startLocalTunnel(config.port, subToUse, (url) => {
+                        if (!config.publicUrl)
+                            config.publicUrl = url;
+                        logger.info({ url }, "LocalTunnel started");
+                    }, logger);
+                    server.__tunnelStop = stop ?? null;
+                }
+            }
+            catch (e) {
+                logger.warn({ err: e.message }, "Failed to start tunnel");
+            }
+        })();
     });
     registerShutdown(server, transportManager, appCleanup, logger);
 }
 function registerShutdown(server, transportManager, cleanup, logger) {
     function shutdown(signal) {
         logger.info({ signal }, "Shutdown signal received");
+        // Stop any tunnel that was started and stored on the server object.
+        try {
+            const stopTunnel = server.__tunnelStop;
+            if (stopTunnel) {
+                stopTunnel();
+            }
+        }
+        catch (e) {
+            logger.warn({ err: e.message }, "Error stopping tunnel");
+        }
         cleanup();
         server.close(async () => {
             await transportManager.close();

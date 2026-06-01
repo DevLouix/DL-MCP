@@ -28,6 +28,7 @@ const flagMap: Record<string, [string, string]> = {
   "--tunnel-cmd":           ["TUNNEL_CMD", "Command to run to expose the server (e.g., 'ngrok http 3000')"],
   "--localtunnel-subdomain": ["LOCALTUNNEL_SUBDOMAIN", "Requested localtunnel subdomain (optional)"],
   "--localtunnel-auto":     ["LOCALTUNNEL_AUTO", "Auto-create a localtunnel (true/false)"],
+  "--tunnel-enabled":       ["TUNNEL_ENABLED", "Enable tunnel startup (true/false)"],
 };
 
 function printHelp(): void {

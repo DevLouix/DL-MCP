@@ -37,6 +37,7 @@ export interface AppConfig {
   tunnelCmd: string;
   localtunnelSubdomain: string;
   localtunnelAuto: boolean;
+  tunnelEnabled: boolean;
 }
 
 function requireEnv(name: string): string {
@@ -94,6 +95,12 @@ export const config: AppConfig = {
   // Default to true when not specified so CLI behavior auto-enables localtunnel.
   localtunnelAuto: (() => {
     const raw = process.env.LOCALTUNNEL_AUTO;
+    if (raw === undefined) return true;
+    return (raw || "").toLowerCase() === "true" || raw === "1";
+  })(),
+  // Tunnel enabled flag: default true when not specified
+  tunnelEnabled: (() => {
+    const raw = process.env.TUNNEL_ENABLED;
     if (raw === undefined) return true;
     return (raw || "").toLowerCase() === "true" || raw === "1";
   })(),

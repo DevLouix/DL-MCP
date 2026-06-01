@@ -1,11 +1,12 @@
 import { configDotenv } from "dotenv";
 import process from "node:process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
-const scriptDir = path.dirname(typeof __dirname !== "undefined"
+import { parseCliArgs } from "./cli.js";
+parseCliArgs();
+const scriptDir = typeof __dirname !== "undefined"
     ? __dirname
-    : fileURLToPath(import.meta.url));
+    : path.dirname(process.argv[1]);
 configDotenv({ path: path.resolve(scriptDir, "../.env") });
 configDotenv();
 function requireEnv(name) {
@@ -52,5 +53,22 @@ export const config = {
     enableTls: (process.env.ENABLE_TLS || "false").toLowerCase() === "true",
     tlsCertPath: process.env.TLS_CERT_PATH || "",
     tlsKeyPath: process.env.TLS_KEY_PATH || "",
+    publicUrl: process.env.PUBLIC_URL || "",
+    tunnelCmd: process.env.TUNNEL_CMD || "",
+    localtunnelSubdomain: process.env.LOCALTUNNEL_SUBDOMAIN || "",
+    // Default to true when not specified so CLI behavior auto-enables localtunnel.
+    localtunnelAuto: (() => {
+        const raw = process.env.LOCALTUNNEL_AUTO;
+        if (raw === undefined)
+            return true;
+        return (raw || "").toLowerCase() === "true" || raw === "1";
+    })(),
+    // Tunnel enabled flag: default true when not specified
+    tunnelEnabled: (() => {
+        const raw = process.env.TUNNEL_ENABLED;
+        if (raw === undefined)
+            return true;
+        return (raw || "").toLowerCase() === "true" || raw === "1";
+    })(),
 };
 //# sourceMappingURL=env.js.map
