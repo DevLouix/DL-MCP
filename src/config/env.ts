@@ -2,6 +2,9 @@ import { configDotenv } from "dotenv";
 import process from "node:process";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
+import { parseCliArgs } from "./cli.js";
+
+parseCliArgs();
 
 const scriptDir = typeof __dirname !== "undefined"
   ? __dirname
