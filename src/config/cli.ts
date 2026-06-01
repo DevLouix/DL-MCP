@@ -61,7 +61,7 @@ function printHelp(): void {
 }
 
 export function parseCliArgs(): void {
-  const args = process.argv.slice(2);
+  const args = process.argv.slice(1);
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
