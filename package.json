@@ -1,6 +1,6 @@
 {
   "name": "dl-mcp",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Enterprise Filesystem MCP Server — cross-platform binary",
   "main": "dist/index.js",
   "type": "module",
