@@ -70,25 +70,32 @@ export async function startLocalTunnel(
   onUrl: (url: string) => void,
   logger: Logger,
 ): Promise<(() => void) | null> {
+  let createTunnel: ((opts: Record<string, unknown>) => Promise<any>) | null = null;
   try {
     const mod = await import("localtunnel");
-    // localtunnel exports a default factory in most builds
-    const createTunnel = (mod as any).default ?? (mod as any);
-    const tunnel = await createTunnel({ port, subdomain });
-    if (tunnel && typeof tunnel.url === "string") {
-      onUrl(tunnel.url.replace(/\/+$/, ""));
-    }
-    return () => {
-      try {
-        tunnel && tunnel.close && tunnel.close();
-      } catch (e) {
-        logger.error({ err: (e as Error).message }, "Error closing localtunnel");
-      }
-    };
+    createTunnel = (mod as any).default ?? (mod as any);
   } catch (err) {
-    // If dynamic import fails (package not installed), fall back to npx localtunnel
-    logger.info({ err: (err as Error).message }, "localtunnel import failed, falling back to npx");
-    const cmd = `npx localtunnel --port ${port}` + (subdomain ? ` --subdomain ${subdomain}` : "");
-    return launchTunnel(cmd, onUrl, logger);
+    logger.info({ err: (err as Error).message }, "localtunnel package import failed, falling back to npx");
   }
+
+  if (createTunnel) {
+    try {
+      const tunnel = await createTunnel({ port, subdomain });
+      if (tunnel && typeof tunnel.url === "string") {
+        onUrl(tunnel.url.replace(/\/+$/, ""));
+      }
+      return () => {
+        try {
+          tunnel && tunnel.close && tunnel.close();
+        } catch (e) {
+          logger.error({ err: (e as Error).message }, "Error closing localtunnel");
+        }
+      };
+    } catch (err) {
+      logger.warn({ err: (err as Error).message }, "localtunnel runtime failed, falling back to npx");
+    }
+  }
+
+  const cmd = `npx localtunnel --port ${port}` + (subdomain ? ` --subdomain ${subdomain}` : "");
+  return launchTunnel(cmd, onUrl, logger);
 }
