@@ -250,7 +250,7 @@ await fs.readFile(bad);
 Other security invariants:
 - **SSRF**: `isPrivateHost()` blocks RFC 1918, link-local, IPv6 loopback/ULA; `redirect: "error"` on fetch; 30s timeout via `AbortController`
 - **ReDoS**: pattern length ≤ 200 chars, nested-quantifier detection, performance fast-reject before `new RegExp()`
-- **Auth**: `crypto.timingSafeEqual()` for token comparison; query-string token not supported
+- **Auth**: `crypto.timingSafeEqual()` for token comparison; accepted via `Authorization: Bearer` header, `X-API-Key` header, or `?token=` query parameter (checked in that order)
 - **Rate limiting**: per-request-ID sliding window with `X-RateLimit-*` headers
 
 ---

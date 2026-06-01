@@ -10,7 +10,7 @@ const result = await esbuild.build({
   entryPoints: ["src/index.ts"],
   bundle: true,
   platform: "node",
-  target: "node20",
+  target: "node18",
   format: "cjs",
   outfile: "dist/bundle.cjs",
   sourcemap: true,

@@ -8,7 +8,6 @@ const scriptDir = typeof __dirname !== "undefined"
   : path.dirname(process.argv[1]);
 configDotenv({ path: path.resolve(scriptDir, "../.env") });
 configDotenv();
-configDotenv();
 
 export interface AppConfig {
   port: number;

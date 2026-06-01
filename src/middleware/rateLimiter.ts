@@ -21,7 +21,7 @@ export function rateLimiter(maxRequests: number, windowMs: number) {
 
   return {
     middleware: (req: Request, res: Response, next: NextFunction): void => {
-    const key = (req as any).requestId || req.ip || req.socket.remoteAddress || "unknown";
+    const key = req.requestId || req.ip || req.socket.remoteAddress || "unknown";
     const now = Date.now();
     const entry = buckets.get(key);
 

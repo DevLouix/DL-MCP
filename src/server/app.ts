@@ -12,14 +12,6 @@ import { requestIdMiddleware } from "../middleware/requestId.js";
 import type { Logger } from "../types/index.js";
 import { SERVER_VERSION } from "../constants.js";
 
-declare global {
-  namespace Express {
-    interface Request {
-      requestId: string;
-    }
-  }
-}
-
 morgan.token("request-id", (req: Request) => req.requestId || "-");
 
 export function createApp(transportManager: TransportManager, logger: Logger) {

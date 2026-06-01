@@ -1,6 +1,6 @@
 {
   "name": "dl-mcp",
-  "version": "0.0.5",
+  "version": "1.2.0",
   "description": "Enterprise Filesystem MCP Server — cross-platform binary",
   "main": "dist/index.js",
   "type": "module",
@@ -21,7 +21,11 @@
     "type": "git",
     "url": "git+https://github.com/DevLouix/DL-MCP.git"
   },
-  "keywords": ["mcp", "filesystem", "enterprise"],
+  "keywords": [
+    "mcp",
+    "filesystem",
+    "enterprise"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {

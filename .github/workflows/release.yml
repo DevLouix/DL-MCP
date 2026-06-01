@@ -47,13 +47,13 @@ jobs:
         run: cp .env dist/bundle.env
 
       - name: Build Linux binary
-        run: npx pkg dist/bundle.cjs --targets node20-linux-x64 --output dist/dl-mcp-linux --compress Brotli
+        run: npx pkg dist/bundle.cjs --targets node18-linux-x64 --output dist/dl-mcp-linux --compress Brotli
 
       - name: Build macOS binary (arm64)
-        run: npx pkg dist/bundle.cjs --targets node20-macos-arm64 --output dist/dl-mcp-macos --compress Brotli
+        run: npx pkg dist/bundle.cjs --targets node18-macos-arm64 --output dist/dl-mcp-macos --compress Brotli
 
       - name: Build Windows binary
-        run: npx pkg dist/bundle.cjs --targets node20-win-x64 --output dist/dl-mcp-win.exe --compress Brotli
+        run: npx pkg dist/bundle.cjs --targets node18-win-x64 --output dist/dl-mcp-win.exe --compress Brotli
 
       - name: Create release archive
         run: |
